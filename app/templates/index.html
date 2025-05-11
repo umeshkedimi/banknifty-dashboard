@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bank Nifty Live Price</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f0f2f5;
+        }
+        h1 {
+            color: #1a237e;
+            text-align: center;
+        }
+        #price {
+            font-size: 28px;
+            margin: 20px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-width: 600px;
+        }
+        .error {
+            color: #d32f2f;
+        }
+        .success {
+            color: #388e3c;
+        }
+        .status {
+            font-size: 14px;
+            margin: 10px auto;
+            padding: 10px;
+            background-color: white;
+            border-radius: 4px;
+            max-width: 600px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h1>Bank Nifty Live Price</h1>
+    <div id="price">Waiting for data...</div>
+    <div id="status" class="status">Connecting...</div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:8000/ws/ticks');
+        const statusDiv = document.getElementById('status');
+        const priceDiv = document.getElementById('price');
+        let lastUpdateTime = null;
+
+        function updateStatus(message, isError = false) {
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${isError ? 'error' : 'success'}`;
+        }
+        
+        ws.onopen = function() {
+            console.log('WebSocket Connected');
+            updateStatus('Connected to server');
+        };
+
+        ws.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                
+                if (data.status === "connected") {
+                    updateStatus('Connected to server');
+                    return;
+                }
+                
+                if (data.price) {
+                    lastUpdateTime = new Date().toLocaleTimeString();
+                    priceDiv.innerHTML = `
+                        <div style="text-align: center">
+                            <div style="font-size: 36px; margin-bottom: 10px">
+                                ₹${data.price.toLocaleString('en-IN', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                })}
+                            </div>
+                            <div style="color: #666">
+                                Time: ${new Date(data.timestamp).toLocaleString()}
+                            </div>
+                            <div style="color: #666">
+                                Last Update: ${lastUpdateTime}
+                            </div>
+                        </div>
+                    `;
+                    updateStatus('Live data receiving');
+                }
+            } catch (e) {
+                console.error('Error processing message:', e);
+                updateStatus(`Error processing data: ${e.message}`, true);
+            }
+        };
+
+        ws.onclose = function() {
+            updateStatus('Connection closed - attempting to reconnect...', true);
+            setTimeout(() => {
+                window.location.reload();
+            }, 5000);
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket Error:', error);
+            updateStatus('Connection error occurred', true);
+        };
+
+        setInterval(() => {
+            if (lastUpdateTime) {
+                const now = new Date();
+                const lastUpdate = new Date(lastUpdateTime);
+                const diffSeconds = (now - lastUpdate) / 1000;
+                if (diffSeconds > 10) {
+                    updateStatus('No data received in last 10 seconds', true);
+                }
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
